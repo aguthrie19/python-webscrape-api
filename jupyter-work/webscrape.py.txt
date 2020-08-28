@@ -1,0 +1,324 @@
+import requests
+import lxml
+from bs4 import BeautifulSoup
+import numpy as np
+import itertools
+import csv
+--
+# start a session that persists cookies
+scrape_session = requests.Session()
+--
+# navigate to the login page
+page_login = scrape_session.get('https://sidekick.jfhillebrand.com/users/sign_in')
+soup_login = BeautifulSoup(page_login.content, features="lxml")
+
+# Show in readable format
+#print(soup_login.prettify())
+#print(page_login.__dict__)
+--
+new_user_css = soup_login.find_all("form", class_="new_user")[0] #assume recieve list of length exactly 1
+user_csrf = new_user_css.find_all("input",{"name" : "authenticity_token"})[0] #https://portswigger.net/web-security/csrf
+--
+user_csrf["value"]
+--
+
+url = 'https://sidekick.jfhillebrand.com/users/sign_in'
+
+#cookies = {
+#    '_WineApp_session': 'WDVIdnNTRzd5a2dIMVhLVThaY0w0U1ZqaGgybjkvK2p3Tjd0OENtTDhjOEphZ1B4MktJUjVvOU5yMHpwNHV5YmEwdTZwcDlCbnpNcGtwUkM2QVhQMDVPeUd1cXJ1VkpMWHRMNzRxaUppVzVMRUlYUUd6eFFxMUIweCs2emZJT1hUTC9BYUorWDkwc2ZBQVZUbU5GWFNrRjhNYldkTWhBV1FDbFVoZkZ0RlU1Z2FtVUpZcDJCZG9lcUIrK0dJMmNQVnU5Sm5McmtoSVB6SmdzUFNPQVpMa3UzYU5sOFQ1cVBHS2pqKzBoYkFuQ1M5Y1RnTUJEWHdsY3BXQUdKcmtHaTZoeUZHeG1RZjhoeTBhWDZWRy90TDNpbWVNeUF2cEFHVTJJR2xSWFpZZkQ1ZWNCbjVSRjVoVVB1eDdTcW9tL2ZLd2lCMFNOT1Q3WVJLdTJYdy91OS9jakpUU2JFYTNPazRjbldWS3ZRNGQwYlliZnVrNjR4Z0QzSnNVM2Q0MTJCU2g2NmErUlJEUU9FZzlEanJ0cGwzc3pSeUM0SGI2WS9WLzh5bXNmanNQcz0tLXVpd3pEZ2UzUitOcmpVZ0tHSkN6QWc9PQ%3D%3D--d07c6adb088009d583744880e35e8b10909ee3b0',
+#}
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Origin': 'https://sidekick.jfhillebrand.com',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/users/sign_in',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'same-origin',
+    'Sec-Fetch-User': '?1',
+    'TE': 'Trailers',
+}
+
+data = {
+  'utf8': '\u2713',
+  'authenticity_token': user_csrf["value"],
+  'user[email]': '...removed...',
+  'user[password]': '...removed...',
+  'user[remember_me]': '0',
+  'commit': 'Sign in'
+}
+
+#response = scrape_session.post(url, headers=headers, cookies=cookies, data=data)
+response = scrape_session.post(url, headers=headers, data=data)
+--
+# Save the content
+#content = response.content
+# Create soup
+#soup = BeautifulSoup(content, features="lxml")
+# Show in readable format
+#print(soup.prettify())
+# Find all accounts?
+#samples = soup.find_all(string="accounts")
+#print(samples)
+--
+# request first accounts page
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-CSRF-Token': user_csrf["value"],
+    'X-Requested-With': 'XMLHttpRequest',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+    #'If-None-Match': '"e5fcfa0c02f0681f4293a98e3034caff"',
+    'TE': 'Trailers',
+}
+
+page_accounts_entrypoint = scrape_session.get('https://sidekick.jfhillebrand.com/api/v1/accounts', headers=headers)
+--
+# Get available account pages
+current_page = page_accounts_entrypoint.json()["pagination"]["page"]
+total_pages = page_accounts_entrypoint.json()["pagination"]["pages"]
+per_page = page_accounts_entrypoint.json()["pagination"]["per_page"]
+--
+#https://stackoverflow.com/questions/19201868/how-to-set-dtype-for-nested-numpy-ndarray
+data = [
+    ('spire', '250um', [(0, 1.89e6, 0.0)]),
+    ('spire', '350',   [(0, 1.89e6, 0.0)])
+]
+table = np.array(data, dtype=[('instrument', '|S32'),
+                               ('filter', '|S64'),
+                               ('response', [('linenumber', 'i'),
+                                             ('wavelength', 'f'),
+                                             ('throughput', 'f')], (1,))
+                              ])
+
+print(table)
+--
+testtype = {
+    "name":"U10",
+    "age":"i4",
+    "weight":"f4"
+}
+testdtype = np.dtype([('name', 'U10'), ('age', [("first",'i4'),("second",'i4')],(1,)), ('weight', 'f4')])
+#testdtype = np.dtype([(k,v) for k,v in iter(testtype.items())])
+print(dir(testdtype))
+print(testdtype.names)
+
+tx = np.array([('Rex', [(9,10)], 81.0), ('Fido', [(3,4)], 27.0)],dtype=testdtype)
+print(tx)
+ty = np.zeros(1,dtype=testdtype)
+print(type(ty),ty.shape,ty)  #ndarray has no field attribute
+--
+# Init our structured numpy array type for csv report
+account_id = {"id":"U30"}
+company_name = {"company name":"U30"}
+contact = {
+    "first name":"U30",  # str returns an empty string, which is a "<U" with zero size, this means the type does not reserve space to assign values
+    "last name":"U30",
+    "email":"U30",
+    "phone":"U30"
+}
+address = {
+    "street":"U30",
+    "city":"U30",
+    "state":"U30",
+    "zip":"U30"
+}
+#https://stackoverflow.com/questions/45106398/how-to-construct-nested-numpy-record-arrays
+contact_dtype = np.dtype([(k,v) for k,v in iter(contact.items())])
+address_dtype = np.dtype([(k,v) for k,v in iter(address.items())])
+report_dtype = np.dtype([
+    *[kv for kv in account_id.items()],  # [] lists to use comprehension short hand, * to unpack
+    *[kv for kv in company_name.items()],
+    ("contact",contact_dtype,(1,)), #("contact",contact_dtype),
+    ("address",address_dtype,(1,))  #("address",address_dtype)
+])
+
+# check the simpler arrays are behaving as expected (assingment and type)
+#w = np.ones(1,dtype=contact_dtype)
+#print(w)
+#x = np.full(1,"a",dtype=contact_dtype)
+#print(x)
+#y = np.array([("1","2","3","4")],dtype=contact_dtype)
+#print(y.dtype,y)
+
+#z = np.full(1,"test",dtype=report_dtype)
+#print(z.dtype, z)
+#z = np.array([("1","2",[("3","4","5","6")],[("7","8","9","10")])],dtype=report_dtype)
+#print(z.dtype, z)
+
+# Useful report format when working in python
+#report = np.full(total_pages*per_page,"",dtype=report_dtype)
+#print(report.shape,report)
+
+# Useful report format when exporting
+#report = np.full((total_pages*per_page,10),"")
+
+
+header = 'id,company name,first name, last name, email, phone, street, city, state, zip'.split(",")
+with open('report.csv', 'a', newline='') as reportfile:
+    awriter = csv.writer(reportfile, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+    awriter.writerow(header)
+--
+# Get name of an account
+account_name = page_accounts_entrypoint.json()["items"][0]["id"]
+#{"items":[{"id":17725,"active":false,"name":"*Missing*","zone":{"id":10,"name":"Remote","created_at":null,"updated_at":null,"active":true,"display_order":14,"billing_name":"Remote"},"region":null,"created_at":"2020-06-08T11:13:16.000-07:00","updated_at":"2020-06-23T21:32:37.000-07:00","abc_license":null,"notes":null,"account_num":"627857387","journal_id":122938,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":null,"contact":{"id":15828,"name":"Jason Holmes","email":"jasonholmes72@outlook.com","phone":"212.366.6877","created_at":"2020-06-08T11:13:16.000-07:00","updated_at":"2020-06-08T11:13:16.000-07:00"},"address":{"id":18025,"line_1":"815 W 52nd Street","line_2":"","city":"Kansas City","state":"MO","zipcode":"64112","lat":"0.0","lon":"0.0","created_at":"2020-06-08T11:13:16.000-07:00","updated_at":"2020-06-23T21:32:37.000-07:00","verified":true}},{"id":17731,"active":false,"name":"*Missing*","zone":{"id":10,"name":"Remote","created_at":null,"updated_at":null,"active":true,"display_order":14,"billing_name":"Remote"},"region":null,"created_at":"2020-06-08T11:13:30.000-07:00","updated_at":"2020-06-23T21:32:48.000-07:00","abc_license":null,"notes":null,"account_num":"627857393","journal_id":122944,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":null,"contact":{"id":15834,"name":"Mr. Alan Maner","email":"alan.maner@fmglobal.com","phone":"469.715.7071","created_at":"2020-06-08T11:13:30.000-07:00","updated_at":"2020-06-08T11:13:30.000-07:00"},"address":{"id":18031,"line_1":"1 Cowboys Way","line_2":"Suite 600","city":"Frisco","state":"TX","zipcode":"75034","lat":"0.0","lon":"0.0","created_at":"2020-06-08T11:13:30.000-07:00","updated_at":"2020-06-23T21:32:48.000-07:00","verified":true}},{"id":17732,"active":false,"name":"*Missing*","zone":{"id":10,"name":"Remote","created_at":null,"updated_at":null,"active":true,"display_order":14,"billing_name":"Remote"},"region":null,"created_at":"2020-06-08T11:13:31.000-07:00","updated_at":"2020-06-23T21:32:42.000-07:00","abc_license":null,"notes":null,"account_num":"627857394","journal_id":122945,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":null,"contact":{"id":15835,"name":"Theresa Godchaux","email":"theresagodchaux@gmail.com","phone":"615.828.8089","created_at":"2020-06-08T11:13:31.000-07:00","updated_at":"2020-06-08T11:13:31.000-07:00"},"address":{"id":18032,"line_1":"4320 Willowbrook Lane","line_2":"","city":"Wilson","state":"WY","zipcode":"83014","lat":"0.0","lon":"0.0","created_at":"2020-06-08T11:13:31.000-07:00","updated_at":"2020-06-23T21:32:42.000-07:00","verified":true}},{"id":17733,"active":false,"name":"*Missing*","zone":{"id":10,"name":"Remote","created_at":null,"updated_at":null,"active":true,"display_order":14,"billing_name":"Remote"},"region":null,"created_at":"2020-06-08T11:13:32.000-07:00","updated_at":"2020-06-23T21:32:53.000-07:00","abc_license":null,"notes":null,"account_num":"627857395","journal_id":122946,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":null,"contact":{"id":15836,"name":"Mr. David Lubben & Ms. Cari Anderson","email":"davidlubben@mac.com","phone":"612.865.5036","created_at":"2020-06-08T11:13:32.000-07:00","updated_at":"2020-06-08T11:13:32.000-07:00"},"address":{"id":18033,"line_1":"2872 Appaloosa Trail","line_2":"","city":"Wellington","state":"FL","zipcode":"33414","lat":"0.0","lon":"0.0","created_at":"2020-06-08T11:13:32.000-07:00","updated_at":"2020-06-23T21:32:53.000-07:00","verified":true}},{"id":6278,"active":true,"name":"042 - Antioch BevMo","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":5,"name":"East Bay","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"EB"},"created_at":"2016-10-13T12:47:42.000-07:00","updated_at":"2020-08-26T00:16:33.000-07:00","abc_license":null,"notes":"DO NOT MAKE PARTIAL DELIVERIES. If mispick occurred, take back ALL cases of this order, correct problem, & re-deliver entire order the next day.","account_num":"627845940","journal_id":12384,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T09:00:00Z","business_monday_close":"2000-01-01T21:00:00Z","business_tuesday_open":"2000-01-01T09:00:00Z","business_tuesday_close":"2000-01-01T21:00:00Z","business_wednesday_open":"2000-01-01T09:00:00Z","business_wednesday_close":"2000-01-01T21:00:00Z","business_thursday_open":"2000-01-01T09:00:00Z","business_thursday_close":"2000-01-01T21:00:00Z","business_friday_open":"2000-01-01T09:00:00Z","business_friday_close":"2000-01-01T22:00:00Z","balance":-576,"zipcode":{"id":50308,"zone_id":11,"code":"94531","created_at":"2020-08-09T14:08:21.000-07:00","updated_at":"2020-08-09T14:08:21.000-07:00","region_id":5,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":6165,"name":null,"email":null,"phone":"(925) 754-8600","created_at":"2016-10-13T12:47:42.000-07:00","updated_at":"2016-10-13T12:47:42.000-07:00"},"address":{"id":7290,"line_1":"5859 Lone Tree Way","line_2":"","city":"Antioch","state":"CA","zipcode":"94531","lat":"37.9625048","lon":"-121.734979","created_at":"2016-10-13T12:47:42.000-07:00","updated_at":"2017-12-05T01:51:37.000-08:00","verified":true}},{"id":6293,"active":true,"name":"067 Bistro","zone":{"id":14,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":11,"billing_name":"South Extended"},"region":{"id":12,"name":"San Diego","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"SD"},"created_at":"2016-10-17T11:48:16.000-07:00","updated_at":"2020-01-13T13:17:20.000-08:00","abc_license":null,"notes":"Needs to arrive between 8am-Noon\r\nFairbanks Village Plaza","account_num":"627845955","journal_id":12430,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":"2000-01-01T08:00:00Z","delivery_tuesday_end":"2000-01-01T12:00:00Z","delivery_wednesday_start":"2000-01-01T08:00:00Z","delivery_wednesday_end":"2000-01-01T12:00:00Z","delivery_thursday_start":"2000-01-01T08:00:00Z","delivery_thursday_end":"2000-01-01T12:00:00Z","delivery_friday_start":"2000-01-01T08:00:00Z","delivery_friday_end":"2000-01-01T12:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T07:00:00Z","business_monday_close":"2000-01-01T18:00:00Z","business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-856,"zipcode":{"id":52224,"zone_id":14,"code":"92067","created_at":"2020-08-09T14:08:49.000-07:00","updated_at":"2020-08-09T14:08:49.000-07:00","region_id":12,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":6179,"name":"Bill Baker","email":null,"phone":"(858) 832-8150","created_at":"2016-10-17T11:48:16.000-07:00","updated_at":"2020-01-13T13:17:20.000-08:00"},"address":{"id":7305,"line_1":"16236 San Dieguito Road","line_2":"#214","city":"Rancho Santa Fe","state":"CA","zipcode":"92067","lat":"0.0","lon":"0.0","created_at":"2016-10-17T11:48:16.000-07:00","updated_at":"2020-01-13T13:18:27.000-08:00","verified":true}},{"id":12632,"active":true,"name":"1 Hotel West Hollywood","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":16,"name":"Central LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"CLA"},"created_at":"2019-05-07T14:22:56.000-07:00","updated_at":"2019-09-26T12:09:48.000-07:00","abc_license":null,"notes":"Loading dock entrance on La Cienega just south of Sunset Blvd. Max truck length is 28 feet.","account_num":"627852294","journal_id":60303,"delivery_monday_start":"2000-01-01T08:00:00Z","delivery_monday_end":"2000-01-01T16:00:00Z","delivery_tuesday_start":"2000-01-01T08:00:00Z","delivery_tuesday_end":"2000-01-01T16:00:00Z","delivery_wednesday_start":"2000-01-01T08:00:00Z","delivery_wednesday_end":"2000-01-01T16:00:00Z","delivery_thursday_start":"2000-01-01T08:00:00Z","delivery_thursday_end":"2000-01-01T16:00:00Z","delivery_friday_start":"2000-01-01T08:00:00Z","delivery_friday_end":"2000-01-01T16:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T08:00:00Z","business_monday_close":"2000-01-01T16:00:00Z","business_tuesday_open":"2000-01-01T08:00:00Z","business_tuesday_close":"2000-01-01T16:00:00Z","business_wednesday_open":"2000-01-01T08:00:00Z","business_wednesday_close":"2000-01-01T16:00:00Z","business_thursday_open":"2000-01-01T08:00:00Z","business_thursday_close":"2000-01-01T16:00:00Z","business_friday_open":"2000-01-01T08:00:00Z","business_friday_close":"2000-01-01T16:00:00Z","balance":-84,"zipcode":{"id":50122,"zone_id":12,"code":"90069","created_at":"2020-08-09T14:08:19.000-07:00","updated_at":"2020-08-09T14:08:19.000-07:00","region_id":16,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":11643,"name":null,"email":"Brian.bemben@jeremyhotel.com","phone":"310-424-1600","created_at":"2019-05-07T14:22:56.000-07:00","updated_at":"2019-09-09T18:20:37.000-07:00"},"address":{"id":13484,"line_1":"8490 Sunset Blvd","line_2":"","city":"West Hollywood","state":"CA","zipcode":"90069","lat":"34.0940701","lon":"-118.375675","created_at":"2019-05-07T14:22:56.000-07:00","updated_at":"2019-09-09T18:20:37.000-07:00","verified":true}},{"id":10448,"active":true,"name":"100 Proof Liquor","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":10,"name":"East LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"ELA"},"created_at":"2018-04-25T14:32:23.000-07:00","updated_at":"2018-09-12T09:55:47.000-07:00","abc_license":"21 376077","notes":null,"account_num":"627850110","journal_id":31561,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-2,"zipcode":{"id":50472,"zone_id":12,"code":"90713","created_at":"2020-08-09T14:08:24.000-07:00","updated_at":"2020-08-09T14:08:24.000-07:00","region_id":10,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":9576,"name":"Melissa","email":"gant@harlanestate.com","phone":"707.226.6005","created_at":"2018-04-25T14:32:23.000-07:00","updated_at":"2020-06-17T10:43:09.000-07:00"},"address":{"id":11270,"line_1":"5601 South St","line_2":"","city":"Lakewood","state":"CA","zipcode":"90713","lat":"33.8605708","lon":"-118.1234274","created_at":"2018-04-25T14:32:23.000-07:00","updated_at":"2020-01-27T08:01:52.000-08:00","verified":true}},{"id":13480,"active":false,"name":"100 Proof Liquor","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":10,"name":"East LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"ELA"},"created_at":"2019-09-10T09:13:14.000-07:00","updated_at":"2019-09-24T14:18:56.000-07:00","abc_license":null,"notes":"duplicate account","account_num":"627853142","journal_id":73466,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":{"id":50472,"zone_id":12,"code":"90713","created_at":"2020-08-09T14:08:24.000-07:00","updated_at":"2020-08-09T14:08:24.000-07:00","region_id":10,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"address":{"id":14318,"line_1":"5601 South Street","line_2":"","city":"Lakewood","state":"CA","zipcode":"90713","lat":"33.8605708","lon":"-118.1234274","created_at":"2019-09-10T09:13:14.000-07:00","updated_at":"2019-09-10T09:13:14.000-07:00","verified":true}},{"id":18632,"active":true,"name":"100% Italiano","zone":{"id":10,"name":"Remote","created_at":null,"updated_at":null,"active":true,"display_order":14,"billing_name":"Remote"},"region":null,"created_at":"2020-07-14T14:03:49.000-07:00","updated_at":"2020-07-14T14:03:49.000-07:00","abc_license":null,"notes":null,"account_num":"627858294","journal_id":133080,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":null,"address":{"id":18928,"line_1":"1650 Elm Hill Pike, No. 6","line_2":"","city":"Nashville","state":"TN","zipcode":"37210","lat":"0.0","lon":"0.0","created_at":"2020-07-14T14:03:49.000-07:00","updated_at":"2020-07-14T14:03:49.000-07:00","verified":true}},{"id":12754,"active":true,"name":"101 North Eatery & Bar","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":14,"name":"North LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"NLA"},"created_at":"2019-05-29T08:56:19.000-07:00","updated_at":"2019-09-10T14:25:17.000-07:00","abc_license":"47-581797","notes":null,"account_num":"627852416","journal_id":62142,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-72,"zipcode":{"id":50847,"zone_id":12,"code":"91361","created_at":"2020-08-09T14:08:29.000-07:00","updated_at":"2020-08-09T14:08:29.000-07:00","region_id":14,"monday":false,"tuesday":false,"wednesday":true,"thursday":false,"friday":true},"contact":{"id":11741,"name":"Brandon Breceda","email":"bbreceda@gmail.com","phone":"818-268-7951","created_at":"2019-05-29T08:56:19.000-07:00","updated_at":"2019-05-29T08:56:19.000-07:00"},"address":{"id":13607,"line_1":"30760 Russell Ranch Rd","line_2":"Shoppes at Westlake Village","city":"Westlake Village","state":"CA","zipcode":"91361","lat":"0.0","lon":"0.0","created_at":"2019-05-29T08:56:19.000-07:00","updated_at":"2019-09-10T14:25:17.000-07:00","verified":true}},{"id":16930,"active":true,"name":"10th St Liquors","zone":{"id":13,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":10,"billing_name":"North Extended"},"region":{"id":20,"name":"Santa Cruz","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"SC"},"created_at":"2020-04-30T12:51:48.000-07:00","updated_at":"2020-04-30T12:51:48.000-07:00","abc_license":"21 606496","notes":"after 9am","account_num":"627856592","journal_id":112354,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-24,"zipcode":{"id":52329,"zone_id":13,"code":"93940","created_at":"2020-08-09T14:08:51.000-07:00","updated_at":"2020-08-09T14:08:51.000-07:00","region_id":20,"monday":false,"tuesday":false,"wednesday":true,"thursday":false,"friday":true},"contact":{"id":15064,"name":"joseph","email":null,"phone":"805 931 4203","created_at":"2020-04-30T12:51:48.000-07:00","updated_at":"2020-04-30T12:51:48.000-07:00"},"address":{"id":17248,"line_1":"1291 10th Street","line_2":"","city":"Monterey","state":"CA","zipcode":"93940","lat":"36.5936806","lon":"-121.8778499","created_at":"2020-04-30T12:51:48.000-07:00","updated_at":"2020-04-30T12:51:48.000-07:00","verified":true}},{"id":3375,"active":true,"name":"111 Minna Gallery","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":18,"name":"South SF","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"SSF"},"created_at":"2016-03-22T17:42:57.000-07:00","updated_at":"2019-08-21T09:32:02.000-07:00","abc_license":"506901","notes":null,"account_num":"627843037","journal_id":6853,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":"2000-01-01T10:00:00Z","delivery_tuesday_end":"2000-01-01T16:00:00Z","delivery_wednesday_start":"2000-01-01T10:00:00Z","delivery_wednesday_end":"2000-01-01T16:00:00Z","delivery_thursday_start":"2000-01-01T10:00:00Z","delivery_thursday_end":"2000-01-01T16:00:00Z","delivery_friday_start":"2000-01-01T10:00:00Z","delivery_friday_end":"2000-01-01T16:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T07:00:00Z","business_monday_close":"2000-01-01T21:00:00Z","business_tuesday_open":"2000-01-01T07:00:00Z","business_tuesday_close":"2000-01-01T21:00:00Z","business_wednesday_open":"2000-01-01T07:00:00Z","business_wednesday_close":"2000-01-01T21:00:00Z","business_thursday_open":"2000-01-01T07:00:00Z","business_thursday_close":"2000-01-01T21:00:00Z","business_friday_open":"2000-01-01T07:00:00Z","business_friday_close":"2000-01-01T21:00:00Z","balance":-684,"zipcode":{"id":52505,"zone_id":11,"code":"94105","created_at":"2020-08-09T14:08:54.000-07:00","updated_at":"2020-08-09T14:08:54.000-07:00","region_id":18,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":3440,"name":"Dave Mabry","email":"gant@harlanestate.com","phone":"(415) 974-1719","created_at":"2016-03-22T17:44:42.000-07:00","updated_at":"2020-06-17T10:43:06.000-07:00"},"address":{"id":4345,"line_1":"111 Minna St","line_2":"","city":"San Francisco","state":"CA","zipcode":"94105","lat":"37.7873338","lon":"-122.3995086","created_at":"2016-03-22T17:42:57.000-07:00","updated_at":"2020-07-20T15:48:06.000-07:00","verified":true}},{"id":5952,"active":false,"name":"111 minna st.","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":18,"name":"South SF","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"SSF"},"created_at":"2016-09-08T13:47:15.000-07:00","updated_at":"2019-03-06T14:01:00.000-08:00","abc_license":null,"notes":null,"account_num":"627845614","journal_id":11662,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":{"id":52505,"zone_id":11,"code":"94105","created_at":"2020-08-09T14:08:54.000-07:00","updated_at":"2020-08-09T14:08:54.000-07:00","region_id":18,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"address":{"id":6956,"line_1":"111 Minna St","line_2":"","city":"San Francisco","state":"CA","zipcode":"94105","lat":"37.7873057","lon":"-122.3993712","created_at":"2016-09-08T13:47:15.000-07:00","updated_at":"2017-12-05T01:38:31.000-08:00","verified":true}},{"id":10355,"active":true,"name":"1126","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":16,"name":"Central LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"CLA"},"created_at":"2018-04-16T09:05:51.000-07:00","updated_at":"2019-12-03T11:04:57.000-08:00","abc_license":null,"notes":null,"account_num":"627850017","journal_id":30614,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T09:00:00Z","business_monday_close":"2000-01-01T22:00:00Z","business_tuesday_open":"2000-01-01T09:00:00Z","business_tuesday_close":"2000-01-01T22:00:00Z","business_wednesday_open":"2000-01-01T09:00:00Z","business_wednesday_close":"2000-01-01T22:00:00Z","business_thursday_open":"2000-01-01T09:00:00Z","business_thursday_close":"2000-01-01T22:00:00Z","business_friday_open":"2000-01-01T09:00:00Z","business_friday_close":"2000-01-01T22:00:00Z","balance":-6,"zipcode":{"id":50161,"zone_id":12,"code":"91101","created_at":"2020-08-09T14:08:19.000-07:00","updated_at":"2020-08-09T14:08:19.000-07:00","region_id":16,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"address":{"id":11177,"line_1":"721 East Colorado Blvd","line_2":"","city":"Pasadena","state":"CA","zipcode":"91101","lat":"0.0","lon":"0.0","created_at":"2018-04-16T09:05:51.000-07:00","updated_at":"2018-04-16T09:05:51.000-07:00","verified":true}},{"id":12334,"active":false,"name":"119972","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":15,"name":"West LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"WLA"},"created_at":"2019-03-25T14:23:38.000-07:00","updated_at":"2019-09-10T14:26:26.000-07:00","abc_license":null,"notes":null,"account_num":"627851996","journal_id":54118,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":{"id":52597,"zone_id":12,"code":"90277","created_at":"2020-08-09T14:08:55.000-07:00","updated_at":"2020-08-09T14:08:55.000-07:00","region_id":15,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":11368,"name":"Todd Serota","email":null,"phone":null,"created_at":"2019-03-25T14:23:38.000-07:00","updated_at":"2019-03-25T14:23:38.000-07:00"},"address":{"id":13178,"line_1":"205 Ave. L, #1","line_2":"","city":"Redondo Beach","state":"CA","zipcode":"90277","lat":"0.0","lon":"0.0","created_at":"2019-03-25T14:23:38.000-07:00","updated_at":"2019-03-25T14:23:38.000-07:00","verified":true}},{"id":1,"active":true,"name":"123 Bolinas","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":2,"name":"North Bay","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"NB"},"created_at":"2013-07-05T17:29:59.000-07:00","updated_at":"2019-09-10T14:27:01.000-07:00","abc_license":"abc#: 41-501555; resale#: 102-911610","notes":"Account opens at 5pm.\r\n\r\nCall Matt 215-779-3959\r\n\r\nCan place wine in locker in drive way by back door if not on site to receive- access code 0328.","account_num":"627839647","journal_id":464,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":"2000-01-01T08:00:00Z","delivery_tuesday_end":"2000-01-01T17:00:00Z","delivery_wednesday_start":"2000-01-01T08:00:00Z","delivery_wednesday_end":"2000-01-01T17:00:00Z","delivery_thursday_start":"2000-01-01T08:00:00Z","delivery_thursday_end":"2000-01-01T17:00:00Z","delivery_friday_start":"2000-01-01T08:00:00Z","delivery_friday_end":"2000-01-01T17:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":"2000-01-01T17:00:00Z","business_tuesday_close":"2000-01-01T22:00:00Z","business_wednesday_open":"2000-01-01T17:00:00Z","business_wednesday_close":"2000-01-01T22:00:00Z","business_thursday_open":"2000-01-01T17:00:00Z","business_thursday_close":"2000-01-01T22:00:00Z","business_friday_open":"2000-01-01T16:00:00Z","business_friday_close":"2000-01-01T23:00:00Z","balance":-729,"zipcode":{"id":50726,"zone_id":11,"code":"94930","created_at":"2020-08-09T14:08:27.000-07:00","updated_at":"2020-08-09T14:08:27.000-07:00","region_id":2,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":1913,"name":"JT","email":"manager@123bolinas.com","phone":"(415) 488-5123","created_at":"2015-04-30T13:59:21.000-07:00","updated_at":"2015-04-30T13:59:21.000-07:00"},"address":{"id":2570,"line_1":"123 Bolinas Rd","line_2":"","city":"Fairfax","state":"CA","zipcode":"94930","lat":"37.9851795","lon":"-122.5901257","created_at":"2015-04-30T13:59:21.000-07:00","updated_at":"2017-12-04T22:58:08.000-08:00","verified":true}},{"id":11300,"active":true,"name":"13 Prime Steak","zone":{"id":9,"name":"Outlier","created_at":null,"updated_at":null,"active":true,"display_order":13,"billing_name":"Outlier"},"region":{"id":6,"name":"Outlier","zone_id":9,"created_at":null,"updated_at":null,"abbreviation":"OUT"},"created_at":"2018-10-12T08:18:37.000-07:00","updated_at":"2020-06-25T21:24:32.000-07:00","abc_license":"47-592863","notes":null,"account_num":"627850962","journal_id":44000,"delivery_monday_start":"2000-01-01T10:00:00Z","delivery_monday_end":"2000-01-01T15:00:00Z","delivery_tuesday_start":"2000-01-01T10:00:00Z","delivery_tuesday_end":"2000-01-01T15:00:00Z","delivery_wednesday_start":"2000-01-01T10:00:00Z","delivery_wednesday_end":"2000-01-01T15:00:00Z","delivery_thursday_start":"2000-01-01T10:00:00Z","delivery_thursday_end":"2000-01-01T15:00:00Z","delivery_friday_start":"2000-01-01T10:00:00Z","delivery_friday_end":"2000-01-01T15:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-24,"zipcode":{"id":50226,"zone_id":9,"code":"93619","created_at":"2020-08-09T14:08:20.000-07:00","updated_at":"2020-08-09T14:08:20.000-07:00","region_id":6,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":10377,"name":"Tiffany Hendy","email":"billing@13primesteak.com","phone":"559-288-9655","created_at":"2018-10-12T08:18:37.000-07:00","updated_at":"2018-10-12T08:18:37.000-07:00"},"address":{"id":12123,"line_1":"1345 N Willow Ave","line_2":"","city":"Clovis","state":"CA","zipcode":"93619","lat":"36.853642","lon":"-119.7279889","created_at":"2018-10-12T08:18:37.000-07:00","updated_at":"2020-07-14T15:02:35.000-07:00","verified":true}},{"id":9220,"active":true,"name":"1300 Bar","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":14,"name":"North LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"NLA"},"created_at":"2017-12-14T11:55:41.000-08:00","updated_at":"2018-09-12T09:55:23.000-07:00","abc_license":"42-524775","notes":null,"account_num":"627848882","journal_id":21127,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-20,"zipcode":{"id":50787,"zone_id":12,"code":"91204","created_at":"2020-08-09T14:08:28.000-07:00","updated_at":"2020-08-09T14:08:28.000-07:00","region_id":14,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":8744,"name":"alina brindusescu","email":"1300bar@gmail.com","phone":"213-718-3045","created_at":"2017-12-14T11:55:41.000-08:00","updated_at":"2017-12-14T11:55:41.000-08:00"},"address":{"id":10258,"line_1":"1300 South Brand Boulevard","line_2":"","city":"Glendale","state":"CA","zipcode":"91204","lat":"34.1297047","lon":"-118.2546202","created_at":"2017-12-14T11:55:41.000-08:00","updated_at":"2017-12-14T11:55:41.000-08:00","verified":true}},{"id":2664,"active":true,"name":"1300 On Fillmore","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":17,"name":"North SF","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"NSF"},"created_at":"2015-11-03T17:02:48.000-08:00","updated_at":"2019-09-10T14:27:33.000-07:00","abc_license":"ABC #47-454822 .Resale # BH 100-958681","notes":"Del: 10-2pm","account_num":"627842326","journal_id":4972,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-210,"zipcode":{"id":50968,"zone_id":11,"code":"94115","created_at":"2020-08-09T14:08:31.000-07:00","updated_at":"2020-08-09T14:08:31.000-07:00","region_id":17,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":2783,"name":"Chris Cohen","email":null,"phone":"415-771-7100","created_at":"2015-11-03T17:02:48.000-08:00","updated_at":"2015-11-03T17:02:48.000-08:00"},"address":{"id":3505,"line_1":"1300 Fillmore St","line_2":"","city":"San Francisco","state":"CA","zipcode":"94115","lat":"37.781588","lon":"-122.4321368","created_at":"2015-11-03T17:02:48.000-08:00","updated_at":"2017-12-04T23:30:14.000-08:00","verified":true}},{"id":14044,"active":true,"name":"14 Cannons Brewing Co.","zone":{"id":12,"name":"South","created_at":null,"updated_at":null,"active":true,"display_order":1,"billing_name":"South"},"region":{"id":14,"name":"North LA","zone_id":12,"created_at":null,"updated_at":null,"abbreviation":"NLA"},"created_at":"2019-11-22T15:11:44.000-08:00","updated_at":"2019-11-22T15:11:44.000-08:00","abc_license":null,"notes":null,"account_num":"627853706","journal_id":82874,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":{"id":50848,"zone_id":12,"code":"91362","created_at":"2020-08-09T14:08:29.000-07:00","updated_at":"2020-08-09T14:08:29.000-07:00","region_id":14,"monday":false,"tuesday":false,"wednesday":true,"thursday":false,"friday":true},"address":{"id":14890,"line_1":"31127 Via Colinas #801a","line_2":"","city":"Westlake Village","state":"CA","zipcode":"91362","lat":"0.0","lon":"0.0","created_at":"2019-11-22T15:11:44.000-08:00","updated_at":"2019-11-22T15:11:44.000-08:00","verified":true}},{"id":8686,"active":true,"name":"1440 Multiversity","zone":{"id":13,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":10,"billing_name":"North Extended"},"region":{"id":20,"name":"Santa Cruz","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"SC"},"created_at":"2017-09-01T12:43:36.000-07:00","updated_at":"2018-12-12T06:43:52.000-08:00","abc_license":null,"notes":"Del 5am to 7pm","account_num":"627848348","journal_id":18122,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":0,"zipcode":{"id":52359,"zone_id":13,"code":"95066","created_at":"2020-08-09T14:08:51.000-07:00","updated_at":"2020-08-09T14:08:51.000-07:00","region_id":20,"monday":false,"tuesday":false,"wednesday":true,"thursday":false,"friday":true},"address":{"id":9711,"line_1":"800 Bethany Dr","line_2":"","city":"Scotts Valley","state":"CA","zipcode":"95066","lat":"37.0750524","lon":"-121.994713","created_at":"2017-09-01T12:43:37.000-07:00","updated_at":"2017-12-05T03:23:59.000-08:00","verified":true}},{"id":3712,"active":true,"name":"15 degrees C Wine Shop & Bar","zone":{"id":9,"name":"Outlier","created_at":null,"updated_at":null,"active":true,"display_order":13,"billing_name":"Outlier"},"region":{"id":6,"name":"Outlier","zone_id":9,"created_at":null,"updated_at":null,"abbreviation":"OUT"},"created_at":"2016-05-04T14:44:21.000-07:00","updated_at":"2020-07-08T11:52:31.000-07:00","abc_license":"522998","notes":"ALI - WINE BUYER","account_num":"627843374","journal_id":7548,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":null,"delivery_tuesday_end":null,"delivery_wednesday_start":null,"delivery_wednesday_end":null,"delivery_thursday_start":null,"delivery_thursday_end":null,"delivery_friday_start":null,"delivery_friday_end":null,"delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T16:00:00Z","business_monday_close":"2000-01-01T21:00:00Z","business_tuesday_open":"2000-01-01T11:00:00Z","business_tuesday_close":"2000-01-01T21:00:00Z","business_wednesday_open":"2000-01-01T11:00:00Z","business_wednesday_close":"2000-01-01T21:00:00Z","business_thursday_open":"2000-01-01T11:00:00Z","business_thursday_close":"2000-01-01T21:00:00Z","business_friday_open":"2000-01-01T11:00:00Z","business_friday_close":"2000-01-01T21:00:00Z","balance":-276,"zipcode":{"id":50064,"zone_id":9,"code":"93465","created_at":"2020-08-09T14:08:18.000-07:00","updated_at":"2020-08-09T14:08:18.000-07:00","region_id":6,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":3750,"name":null,"email":null,"phone":"(805) 434-1554","created_at":"2016-05-04T14:44:21.000-07:00","updated_at":"2016-05-04T14:44:21.000-07:00"},"address":{"id":4700,"line_1":"624 S Main St","line_2":"101","city":"Templeton","state":"CA","zipcode":"93465","lat":"35.5476875","lon":"-120.7071304","created_at":"2016-05-04T14:44:21.000-07:00","updated_at":"2020-08-05T11:36:53.000-07:00","verified":true}},{"id":747,"active":true,"name":"15 Romolo","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":17,"name":"North SF","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"NSF"},"created_at":"2014-11-18T14:48:41.000-08:00","updated_at":"2019-08-20T16:54:02.000-07:00","abc_license":null,"notes":null,"account_num":"627840412","journal_id":1471,"delivery_monday_start":null,"delivery_monday_end":null,"delivery_tuesday_start":"2000-01-01T12:00:00Z","delivery_tuesday_end":"2000-01-01T16:00:00Z","delivery_wednesday_start":"2000-01-01T12:00:00Z","delivery_wednesday_end":"2000-01-01T16:00:00Z","delivery_thursday_start":"2000-01-01T12:00:00Z","delivery_thursday_end":"2000-01-01T16:00:00Z","delivery_friday_start":"2000-01-01T12:00:00Z","delivery_friday_end":"2000-01-01T16:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":null,"business_monday_close":null,"business_tuesday_open":null,"business_tuesday_close":null,"business_wednesday_open":null,"business_wednesday_close":null,"business_thursday_open":null,"business_thursday_close":null,"business_friday_open":null,"business_friday_close":null,"balance":-4516,"zipcode":{"id":50978,"zone_id":11,"code":"94133","created_at":"2020-08-09T14:08:31.000-07:00","updated_at":"2020-08-09T14:08:31.000-07:00","region_id":17,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":1072,"name":"Ian Adams","email":"ian@15romolo.com","phone":"(415) 398-1359","created_at":"2014-11-18T15:02:48.000-08:00","updated_at":"2014-11-18T15:02:48.000-08:00"},"address":{"id":1065,"line_1":"15 Romolo Pl.","line_2":"","city":"San Francisco","state":"CA","zipcode":"94133","lat":"0.0","lon":"0.0","created_at":"2014-11-18T15:02:48.000-08:00","updated_at":"2019-06-24T16:51:15.000-07:00","verified":true}},{"id":7575,"active":true,"name":"1515 Restaurant","zone":{"id":11,"name":"North","created_at":null,"updated_at":null,"active":true,"display_order":0,"billing_name":"North"},"region":{"id":5,"name":"East Bay","zone_id":11,"created_at":null,"updated_at":null,"abbreviation":"EB"},"created_at":"2017-03-15T15:26:41.000-07:00","updated_at":"2020-03-04T17:20:11.000-08:00","abc_license":"47.455980","notes":"9am - 12pm","account_num":"627847237","journal_id":15494,"delivery_monday_start":"2000-01-01T09:00:00Z","delivery_monday_end":"2000-01-01T12:00:00Z","delivery_tuesday_start":"2000-01-01T09:00:00Z","delivery_tuesday_end":"2000-01-01T12:00:00Z","delivery_wednesday_start":"2000-01-01T09:00:00Z","delivery_wednesday_end":"2000-01-01T12:00:00Z","delivery_thursday_start":"2000-01-01T09:00:00Z","delivery_thursday_end":"2000-01-01T12:00:00Z","delivery_friday_start":"2000-01-01T09:00:00Z","delivery_friday_end":"2000-01-01T12:00:00Z","delivery_exclusion_start":null,"delivery_exclusion_end":null,"business_monday_open":"2000-01-01T11:30:00Z","business_monday_close":"2000-01-01T22:00:00Z","business_tuesday_open":"2000-01-01T11:30:00Z","business_tuesday_close":"2000-01-01T22:00:00Z","business_wednesday_open":"2000-01-01T11:30:00Z","business_wednesday_close":"2000-01-01T22:00:00Z","business_thursday_open":"2000-01-01T11:30:00Z","business_thursday_close":"2000-01-01T00:00:00Z","business_friday_open":"2000-01-01T11:30:00Z","business_friday_close":"2000-01-01T00:30:00Z","balance":-126,"zipcode":{"id":50355,"zone_id":11,"code":"94596","created_at":"2020-08-09T14:08:22.000-07:00","updated_at":"2020-08-09T14:08:22.000-07:00","region_id":5,"monday":false,"tuesday":true,"wednesday":true,"thursday":true,"friday":true},"contact":{"id":7393,"name":"Tony Dudum","email":"tony@1515WC.com","phone":"925-765-7722","created_at":"2017-03-15T15:26:41.000-07:00","updated_at":"2017-03-15T15:26:41.000-07:00"},"address":{"id":8600,"line_1":"1515 N Main St","line_2":"","city":"Walnut Creek","state":"CA","zipcode":"94596","lat":"37.9001384","lon":"-122.0614736","created_at":"2017-03-15T15:26:41.000-07:00","updated_at":"2017-12-05T02:42:02.000-08:00","verified":true}}],"sorting":{"column":"name","direction":"asc","options":["account_num","name","active","abc_license","created_at","zone_id"]},"pagination":{"page":1,"pages":781,"per_page":25,"filter":""}}
+print(account_name)
+--
+# Assure that we are connected and can get info about an account
+#with their addresses (showed on this screen), PLUS contact first name, contact last name, email, phone
+import pprint
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-CSRF-Token': user_csrf["value"],
+    'X-Requested-With': 'XMLHttpRequest',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+}
+
+page_an_account = scrape_session.get(f'https://sidekick.jfhillebrand.com/api/v1/accounts/{account_name}', headers=headers)
+pprint.pprint(page_an_account.json())
+--
+# Assure that we can get the next account page
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-CSRF-Token': user_csrf["value"],
+    'X-Requested-With': 'XMLHttpRequest',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+}
+
+params = (
+    ('page', '2'),
+    ('sort_by', 'name'),
+    ('sort_dir', 'asc'),
+)
+
+response = scrape_session.get('https://sidekick.jfhillebrand.com/api/v1/accounts', headers=headers, params=params)
+print(response)
+#NB. Original query string below. It seems impossible to parse and
+#reproduce query strings 100% accurately so the one below is given
+#in case the reproduced version is not "correct".
+# response = requests.get('https://sidekick.jfhillebrand.com/api/v1/accounts?page=2&sort_by=name&sort_dir=asc', headers=headers, cookies=cookies)
+--
+# Fill the structured array
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-CSRF-Token': user_csrf["value"],
+    'X-Requested-With': 'XMLHttpRequest',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+    'TE': 'Trailers'
+    }
+
+while current_page <= total_pages:
+    # Get info about accounts on current pages
+    #with their addresses (showed on this screen), PLUS contact first name, contact last name, email, phone
+    params = (
+        ('page', str(current_page)),
+        ('sort_by', 'name'),
+        ('sort_dir', 'asc'),
+    )
+    page_accounts = scrape_session.get('https://sidekick.jfhillebrand.com/api/v1/accounts', headers=headers, params=params)
+    account_ids = [item["id"] for item in page_accounts.json()["items"]]
+    for account, row in enumerate(account_ids, start=(current_page-1)*per_page):
+        page_an_account = scrape_session.get(f'https://sidekick.jfhillebrand.com/api/v1/accounts/{account}', headers=headers)
+        #print(page_an_account.json())
+        name = ["",""]
+        if page_an_account.json().get("contact",{}).get("name"):
+            name_tmp = page_an_account.json()["contact"]["name"].split(" ")[:2]
+            if len(name_tmp) == 1:
+                name[0] = name_tmp[0]
+            elif len(name_tmp) == 2:
+                name = name_tmp
+        row_content = np.array([(
+            page_an_account.json().get("id",""),
+            page_an_account.json().get("name",""),
+            [(
+                *name,
+                page_an_account.json().get("contact",{}).get("email",""),
+                page_an_account.json().get("contact",{}).get("phone","")
+            )],
+            [(
+                page_an_account.json().get("address",{}).get("line_1",""),
+                page_an_account.json().get("address",{}).get("city",""),
+                page_an_account.json().get("address",{}).get("state",""),
+                page_an_account.json().get("address",{}).get("zipcode","")
+            )]
+        )],dtype=report_dtype)
+        
+        # convert the custom numpy datatype back to a csv writeable format
+        row_content_for_csv = list(itertools.chain(*[
+            row_content["id"].tolist(),
+            row_content["company name"].tolist(),
+            *itertools.chain(*row_content["contact"].tolist()),
+            *itertools.chain(*row_content["address"].tolist())
+        ]))
+        
+        with open('report.csv', 'a', newline='') as reportfile:
+            awriter = csv.writer(reportfile, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+            awriter.writerow(row_content_for_csv)
+    #if current_page % 10 == 0:
+    #    print(current_page)
+    #    print(row_content)
+    #    print(report)
+    #    #report_flat = np.r_[report] try concatenate?
+    #    #print(report_flat)
+    #    np.savetxt(
+    #        'report.csv',
+    #        report,
+    #        delimiter=',',
+    #        fmt='%s',
+    #        header='id,company name,first name, last name, email, phone, street, city, state, zip',
+    #        comments=''
+    #    )
+    current_page = current_page + 1
+#for item in page_accounts_entrypoint.json()["items"]]
+# Get ids of all accounts on this page
+#report = np.array
+#accounts = []
+--
+# Sign out
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0',
+    'Accept': 'text/html, application/xhtml+xml, application/xml',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'X-XHR-Referer': 'https://sidekick.jfhillebrand.com/#deliveries',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': 'https://sidekick.jfhillebrand.com/users/sign_out',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+    'TE': 'Trailers',
+}
+response = scrape_session.get('https://sidekick.jfhillebrand.com/users/sign_out', headers=headers)
